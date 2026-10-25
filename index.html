@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>¡Aventura de Palabras!</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome para íconos -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Font Google: Fredoka para niños -->
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- Canvas Confetti -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <style>
+        * {
+            font-family: 'Fredoka', cursive, sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+
+        .btn-3d {
+            transition: all 0.1s ease;
+            box-shadow: 0px 8px 0px rgba(0, 0, 0, 0.22);
+        }
+        .btn-3d:active {
+            transform: translateY(4px);
+            box-shadow: 0px 4px 0px rgba(0, 0, 0, 0.22);
+        }
+
+        /* Pulsación del micrófono al escuchar */
+        @keyframes pulse-ring {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { transform: scale(1.1); box-shadow: 0 0 0 25px rgba(239, 68, 68, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+
+        .mic-listening {
+            animation: pulse-ring 1.4s infinite ease-in-out;
+            background-color: #dc2626 !important;
+            border-color: #fca5a5 !important;
+        }
+
+        /* Animación de flotación */
+        @keyframes float-anim {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-12px) rotate(2deg); }
+        }
+        .animate-float {
+            animation: float-anim 3s ease-in-out infinite;
+        }
+
+        /* Animación para ondas de voz */
+        @keyframes sound-wave {
+            0%, 100% { height: 8px; }
+            50% { height: 28px; }
+        }
+        .wave-bar {
+            width: 6px;
+            background-color: #ef4444;
+            border-radius: 999px;
+            animation: sound-wave 0.8s infinite ease-in-out;
+        }
+        .wave-bar:nth-child(2) { animation-delay: 0.15s; }
+        .wave-bar:nth-child(3) { animation-delay: 0.3s; }
+        .wave-bar:nth-child(4) { animation-delay: 0.45s; }
+    </style>
+</head>
+<body class="bg-gradient-to-b from-sky-300 via-indigo-200 to-pink-300 min-h-screen flex flex-col justify-between overflow-x-hidden text-gray-800">
+
+    <!-- MODAL DE DESBLOQUEO INICIAL (PULSAR PARA ACTIVAR CORNETAS Y MICRÓFONO EN APK ANDROID) -->
+    <div id="unlock-overlay" class="fixed inset-0 bg-indigo-900/95 backdrop-blur-md z-50 flex flex-col items-center justify-center p-6 text-center">
+        <div class="bg-white rounded-3xl p-6 max-w-sm w-full border-4 border-yellow-400 shadow-2xl flex flex-col items-center gap-4 animate-bounce-once">
+            <div class="w-24 h-24 bg-yellow-100 rounded-full flex items-center justify-center text-5xl text-yellow-600 border-4 border-yellow-300 shadow-inner">
+                🎙️
+            </div>
+            <h1 class="text-2xl font-black text-indigo-900 leading-tight">¡Aventura de Palabras!</h1>
+            <p class="text-gray-600 text-sm font-semibold">
+                Toca el botón mágico para encender las cornetas y el micrófono de tu teléfono.
+            </p>
+            <button id="btn-start-app" onclick="initializeMobileAudioAndMic()" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold text-xl py-4 px-6 rounded-2xl border-b-4 border-emerald-700 btn-3d shadow-lg flex items-center justify-center gap-3">
+                <i class="fa-solid fa-play text-2xl"></i> ¡TOCA PARA EMPEZAR!
+            </button>
+        </div>
+    </div>
+
+    <!-- CONTENEDOR PRINCIPAL -->
+    <div id="app" class="max-w-md w-full mx-auto min-h-screen flex flex-col justify-between p-4 relative">
+
+        <!-- ENCABEZADO DE NAVEGACIÓN Y ESTRELLAS -->
+        <header class="flex justify-between items-center bg-white/85 backdrop-blur-md p-3 rounded-2xl shadow-lg border-2 border-white/60">
+            <button onclick="goHome()" class="bg-yellow-400 hover:bg-yellow-500 text-yellow-950 w-12 h-12 rounded-xl text-xl flex items-center justify-center btn-3d border-2 border-yellow-200">
+                <i class="fa-solid fa-house"></i>
+            </button>
+
+            <!-- Título / Categoría Actual -->
+            <div class="text-center px-2">
+                <span id="header-title" class="text-lg font-extrabold text-indigo-800 block leading-tight">Palabras Mágicas</span>
+                <span id="header-subtitle" class="text-xs text-purple-600 font-bold">Selecciona una categoría</span>
+            </div>
+
+            <!-- Contador de Estrellas -->
+            <div class="bg-amber-100 border-2 border-amber-300 px-3 py-1.5 rounded-xl flex items-center gap-1.5 shadow-sm">
+                <i class="fa-solid fa-star text-yellow-500 text-xl animate-bounce"></i>
+                <span id="star-count" class="text-xl font-black text-amber-800">0</span>
+            </div>
+        </header>
+
+        <!-- BARRA DE PROGRESO -->
+        <div class="w-full bg-white/60 rounded-full h-4 mt-3 p-0.5 border border-white/80 shadow-inner overflow-hidden">
+            <div id="progress-bar" class="bg-gradient-to-r from-yellow-400 to-emerald-400 h-full rounded-full transition-all duration-500 w-0"></div>
+        </div>
+
+        <!-- VISTA 1: MENÚ DE CATEGORÍAS -->
+        <main id="view-menu" class="flex-1 flex flex-col justify-center gap-3 my-4">
+            
+            <div class="text-center mb-1">
+                <h2 class="text-2xl font-black text-white drop-shadow-md">¿Qué quieres practicar hoy?</h2>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3.5">
+                <!-- Animales -->
+                <button onclick="selectCategory('animales')" class="bg-emerald-400 hover:bg-emerald-500 text-white p-4 rounded-3xl flex flex-col items-center gap-1 border-4 border-emerald-200 btn-3d">
+                    <span class="text-5xl">🦁</span>
+                    <span class="text-lg font-black tracking-wide">Animales</span>
+                </button>
+
+                <!-- Frutas y Alimentos -->
+                <button onclick="selectCategory('frutas')" class="bg-rose-400 hover:bg-rose-500 text-white p-4 rounded-3xl flex flex-col items-center gap-1 border-4 border-rose-200 btn-3d">
+                    <span class="text-5xl">🍎</span>
+                    <span class="text-lg font-black tracking-wide">Alimentos</span>
+                </button>
+
+                <!-- Colores y Formas -->
+                <button onclick="selectCategory('colores')" class="bg-purple-400 hover:bg-purple-500 text-white p-4 rounded-3xl flex flex-col items-center gap-1 border-4 border-purple-200 btn-3d">
+                    <span class="text-5xl">🎨</span>
+                    <span class="text-lg font-black tracking-wide">Colores</span>
+                </button>
+
+                <!-- Casa y Escuela -->
+                <button onclick="selectCategory('escuela')" class="bg-sky-400 hover:bg-sky-500 text-white p-4 rounded-3xl flex flex-col items-center gap-1 border-4 border-sky-200 btn-3d">
+                    <span class="text-5xl">✏️</span>
+                    <span class="text-lg font-black tracking-wide">Escuela</span>
+                </button>
+            </div>
+
+            <!-- Selección de Modo de Juego -->
+            <div class="mt-2 bg-white/85 backdrop-blur-md p-3.5 rounded-2xl shadow-md border-2 border-white/60 text-center">
+                <p class="text-xs font-black text-gray-600 uppercase mb-2">Modo de Aprendizaje:</p>
+                <div class="flex gap-2">
+                    <button id="btn-mode-learn" onclick="setMode('aprende')" class="flex-1 py-2.5 px-3 rounded-xl border-2 font-black text-xs bg-indigo-600 text-white border-indigo-800 shadow">
+                        <i class="fa-solid fa-book-open mr-1"></i> Aprende
+                    </button>
+                    <button id="btn-mode-challenge" onclick="setMode('desafio')" class="flex-1 py-2.5 px-3 rounded-xl border-2 font-black text-xs bg-gray-100 text-gray-600 border-gray-300">
+                        <i class="fa-solid fa-trophy mr-1"></i> Desafío
+                    </button>
+                </div>
+            </div>
+        </main>
+
+        <!-- VISTA 2: ÁREA DE JUEGO / PRÁCTICA -->
+        <main id="view-game" class="hidden flex-1 flex flex-col justify-between items-center my-3 gap-3">
+            
+            <!-- TARJETA DE PALABRA / ILUSTRACIÓN -->
+            <div class="w-full bg-white rounded-3xl p-5 shadow-xl border-4 border-indigo-200 flex flex-col items-center relative overflow-hidden">
+                
+                <!-- Indicador de Palabra -->
+                <div id="reward-badge" class="absolute top-3 left-3 bg-amber-400 text-amber-950 font-black text-xs px-3 py-1 rounded-full border border-amber-500 flex items-center gap-1">
+                    <i class="fa-solid fa-medal text-sm"></i> <span id="badge-text">Práctica</span>
+                </div>
+
+                <!-- Ilustración / Emoji Dinámico -->
+                <div id="word-emoji" class="text-8xl my-3 animate-float filter drop-shadow-lg cursor-pointer" onclick="speakCurrentWord()">
+                    🐶
+                </div>
+
+                <!-- Palabra escrita en mayúsculas gigantes -->
+                <h1 id="word-text" class="text-4xl font-black text-indigo-900 tracking-wider mb-1 uppercase">
+                    PERRO
+                </h1>
+
+                <!-- Retroalimentación / Estado -->
+                <div class="h-8 flex items-center justify-center gap-2">
+                    <div id="wave-container" class="hidden flex items-center gap-1">
+                        <div class="wave-bar"></div>
+                        <div class="wave-bar"></div>
+                        <div class="wave-bar"></div>
+                        <div class="wave-bar"></div>
+                    </div>
+                    <p id="speech-feedback" class="text-xs font-bold text-gray-500 text-center">
+                        Toca el micrófono y repite la palabra
+                    </p>
+                </div>
+            </div>
+
+            <!-- CONTROLES INTERACTIVOS -->
+            <div class="w-full flex flex-col gap-3">
+                <div class="flex justify-center items-center gap-3">
+                    
+                    <!-- Botón Reproducir / Repetir Cornetas -->
+                    <button onclick="speakCurrentWord()" class="bg-amber-400 hover:bg-amber-500 text-amber-950 w-16 h-16 rounded-2xl flex flex-col items-center justify-center border-4 border-amber-200 btn-3d shadow-md" title="Escuchar de nuevo">
+                        <i class="fa-solid fa-volume-high text-2xl"></i>
+                        <span class="text-[10px] font-black uppercase mt-0.5">Escuchar</span>
+                    </button>
+
+                    <!-- Botón Gigante de Micrófono -->
+                    <button id="btn-mic" onclick="toggleListening()" class="bg-red-500 hover:bg-red-600 text-white w-24 h-24 rounded-full flex flex-col items-center justify-center border-4 border-red-300 btn-3d shadow-xl relative">
+                        <i id="mic-icon" class="fa-solid fa-microphone text-4xl"></i>
+                        <span id="mic-label" class="text-[11px] font-black uppercase mt-1 tracking-wider">HABLAR</span>
+                    </button>
+
+                    <!-- Botón Siguiente Palabra -->
+                    <button onclick="nextWord()" class="bg-emerald-500 hover:bg-emerald-600 text-white w-16 h-16 rounded-2xl flex flex-col items-center justify-center border-4 border-emerald-300 btn-3d shadow-md" title="Siguiente palabra">
+                        <i class="fa-solid fa-forward text-2xl"></i>
+                        <span class="text-[10px] font-black uppercase mt-0.5">Pasar</span>
+                    </button>
+                </div>
+
+                <!-- BOTÓN ALTERNATIVO DE PRUEBA / RESPALDO SIN MICRÓFONO GOOGLE -->
+                <button onclick="forceManualValidation()" class="w-full bg-blue-500 hover:bg-blue-600 text-white text-xs font-black py-2.5 px-4 rounded-xl border-b-4 border-blue-700 btn-3d flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-circle-check text-base"></i> ¡Ya la dije! (Comprobar)
+                </button>
+            </div>
+
+        </main>
+
+        <!-- PIE DE PÁGINA -->
+        <footer class="text-center py-1">
+            <p class="text-[11px] text-indigo-950 font-extrabold opacity-80">Español Latino • Desarrollo del Lenguaje Infantes</p>
+        </footer>
+
+    </div>
+
+    <!-- MODAL INFORMATIVO -->
+    <div id="modal-alert" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-3xl p-6 max-w-sm w-full text-center border-4 border-yellow-400 shadow-2xl flex flex-col items-center gap-3">
+            <span class="text-5xl">🎙️</span>
+            <h3 class="text-xl font-black text-gray-800">Aviso del Micrófono</h3>
+            <p id="modal-alert-msg" class="text-xs font-semibold text-gray-600">
+                Si tu teléfono no reconoce tu voz automáticamente, puedes usar el botón azul "¡Ya la dije!" para avanzar.
+            </p>
+            <button onclick="closeModal()" class="mt-2 bg-yellow-400 hover:bg-yellow-500 text-yellow-950 font-black py-2.5 px-6 rounded-xl btn-3d border-2 border-yellow-300 text-sm">
+                ¡Entendido!
+            </button>
+        </div>
+    </div>
+
+    <script>
+        /* ==========================================
+           1. BASE DE DATOS DE PALABRAS Y CATEGORÍAS
+        ========================================== */
+        const DATABASE = {
+            animales: [
+                { word: 'Perro', emoji: '🐶', alt: ['perito', 'perros', 'pero'] },
+                { word: 'Gato', emoji: '🐱', alt: ['gatito', 'gatos', 'gato'] },
+                { word: 'León', emoji: '🦁', alt: ['leon', 'leoncito'] },
+                { word: 'Elefante', emoji: '🐘', alt: ['fante', 'elefantes'] },
+                { word: 'Pato', emoji: '🦆', alt: ['patito', 'patos'] },
+                { word: 'Vaca', emoji: '🐮', alt: ['vaquita', 'bacas'] }
+            ],
+            frutas: [
+                { word: 'Manzana', emoji: '🍎', alt: ['mansas', 'mansana', 'manzanas'] },
+                { word: 'Plátano', emoji: '🍌', alt: ['platano', 'guineo', 'cambur', 'banana'] },
+                { word: 'Uva', emoji: '🍇', alt: ['ubas', 'uvas', 'uba'] },
+                { word: 'Galleta', emoji: '🍪', alt: ['galleticas', 'galletas'] },
+                { word: 'Leche', emoji: '🥛', alt: ['lechi', 'leches'] }
+            ],
+            colores: [
+                { word: 'Rojo', emoji: '🔴', alt: ['roja', 'rojos'] },
+                { word: 'Azul', emoji: '🔵', alt: ['asul', 'azules'] },
+                { word: 'Verde', emoji: '🟢', alt: ['berde', 'verdes'] },
+                { word: 'Sol', emoji: '☀️', alt: ['solcito', 'soles'] },
+                { word: 'Estrella', emoji: '⭐', alt: ['estrejita', 'estrella', 'estrellas'] }
+            ],
+            escuela: [
+                { word: 'Pelota', emoji: '⚽', alt: ['balon', 'pelotita', 'pelotas'] },
+                { word: 'Libro', emoji: '📖', alt: ['cuaderno', 'libros'] },
+                { word: 'Lápiz', emoji: '✏️', alt: ['lapis', 'lapices', 'lapiz'] },
+                { word: 'Cama', emoji: '🛏️', alt: ['camita', 'camas'] },
+                { word: 'Silla', emoji: '🪑', alt: ['siyita', 'sija', 'sillas'] }
+            ]
+        };
+
+        const POSITIVE_PRAISES = [
+            "¡Excelente trabajo!",
+            "¡Lo hiciste maravilloso!",
+            "¡Qué bien pronunciaste!",
+            "¡Eres super inteligente!",
+            "¡Muy bien hecho!",
+            "¡Sigue así, lo lograste!"
+        ];
+
+        /* ==========================================
+           2. SINTETIZADOR AUDIO Y EFECTOS DE SONIDO (WEBAUDIO API)
+        ========================================== */
+        let audioCtx = null;
+
+        function getAudioContext() {
+            if (!audioCtx) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (AudioContext) {
+                    audioCtx = new AudioContext();
+                }
+            }
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            return audioCtx;
+        }
+
+        /* Generador de efectos de sonido sintetizados */
+        function playSoundEffect(type) {
+            try {
+                const ctx = getAudioContext();
+                if (!ctx) return;
+
+                const now = ctx.currentTime;
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+
+                if (type === 'click') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(600, now);
+                    osc.frequency.exponentialRampToValueAtTime(200, now + 0.08);
+                    gain.gain.setValueAtTime(0.3, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.08);
+                    osc.start(now);
+                    osc.stop(now + 0.08);
+
+                } else if (type === 'success') {
+                    const notes = [523.25, 659.25, 783.99, 1046.50];
+                    notes.forEach((freq, idx) => {
+                        const noteOsc = ctx.createOscillator();
+                        const noteGain = ctx.createGain();
+                        noteOsc.type = 'triangle';
+                        noteOsc.frequency.setValueAtTime(freq, now + idx * 0.08);
+                        noteGain.gain.setValueAtTime(0.3, now + idx * 0.08);
+                        noteGain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.08 + 0.3);
+                        noteOsc.connect(noteGain);
+                        noteGain.connect(ctx.destination);
+                        noteOsc.start(now + idx * 0.08);
+                        noteOsc.stop(now + idx * 0.08 + 0.3);
+                    });
+
+                } else if (type === 'error') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(180, now);
+                    osc.frequency.setValueAtTime(140, now + 0.15);
+                    gain.gain.setValueAtTime(0.25, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.35);
+                    osc.start(now);
+                    osc.stop(now + 0.35);
+                }
+            } catch (e) {
+                console.warn('Audio Context error:', e);
+            }
+        }
+
+        /* ==========================================
+           3. MANEJO ESPECIAL DE VOZ PARA ANDROID WEBVIEW / APK
+        ========================================== */
+        let currentCategory = 'animales';
+        let currentMode = 'aprende';
+        let currentIndex = 0;
+        let stars = 0;
+        let isListening = false;
+        let selectedLatinVoice = null;
+
+        const synth = window.speechSynthesis;
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition = null;
+
+        function loadVoices() {
+            if (!synth) return;
+            const voices = synth.getVoices();
+
+            if (voices.length === 0) return;
+
+            // Prioridad para voces en Español Latinoamericano
+            selectedLatinVoice = 
+                voices.find(v => v.lang === 'es-MX') ||
+                voices.find(v => v.lang === 'es-419') ||
+                voices.find(v => v.lang === 'es-US') ||
+                voices.find(v => v.lang === 'es-VE') ||
+                voices.find(v => v.lang === 'es-AR') ||
+                voices.find(v => v.lang === 'es-CL') ||
+                voices.find(v => v.lang === 'es-CO') ||
+                voices.find(v => v.lang === 'es-ES') ||
+                voices.find(v => v.lang.startsWith('es'));
+        }
+
+        if (synth) {
+            loadVoices();
+            if (synth.onvoiceschanged !== undefined) {
+                synth.onvoiceschanged = loadVoices;
+            }
+            // Forzar búsqueda en WebViews donde onvoiceschanged no dispara a tiempo
+            setTimeout(loadVoices, 500);
+            setTimeout(loadVoices, 1500);
+        }
+
+        /* Inicialización del reconocimiento de voz nativo */
+        if (SpeechRecognition) {
+            try {
+                recognition = new SpeechRecognition();
+                recognition.continuous = false;
+                recognition.interimResults = false;
+                recognition.lang = 'es-MX';
+
+                recognition.onstart = function() {
+                    isListening = true;
+                    setMicUI(true);
+                    setFeedback('¡Te escucho! Habla alto y claro...', 'text-red-500 animate-pulse font-extrabold');
+                };
+
+                recognition.onresult = function(event) {
+                    const spokenText = event.results[0][0].transcript.toLowerCase().trim();
+                    console.log('Escuchado por micrófono:', spokenText);
+                    evaluateWord(spokenText);
+                };
+
+                recognition.onerror = function(event) {
+                    console.warn('Error SpeechRecognition:', event.error);
+                    isListening = false;
+                    setMicUI(false);
+                    if (event.error === 'not-allowed') {
+                        showModal('Acceso al micrófono no permitido. Puedes usar el botón azul "¡Ya la dije!" para continuar.');
+                    } else {
+                        playSoundEffect('error');
+                        setFeedback('No te escuché bien. ¡Inténtalo de nuevo o toca el botón azul!', 'text-amber-600 font-bold');
+                    }
+                };
+
+                recognition.onend = function() {
+                    isListening = false;
+                    setMicUI(false);
+                };
+            } catch (err) {
+                console.warn("SpeechRecognition no soportado en este WebView nativo", err);
+            }
+        }
+
+        /* ==========================================
+           4. DESBLOQUEO DE PERMISOS APK Y AUDIO
+        ========================================== */
+        async function initializeMobileAudioAndMic() {
+            playSoundEffect('click');
+
+            // 1. Desbloquear WebAudio Context
+            getAudioContext();
+
+            // 2. Desbloquear TTS en WebView con frase vacía previa
+            if (synth) {
+                synth.cancel(); // Solución al bug conocido de Android SpeechSynthesis colgado
+                const primeUtterance = new SpeechSynthesisUtterance('');
+                primeUtterance.volume = 0;
+                synth.speak(primeUtterance);
+                loadVoices();
+            }
+
+            // 3. Solicitar permiso explícito de micrófono con getUserMedia
+            try {
+                if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    stream.getTracks().forEach(track => track.stop());
+                }
+            } catch (err) {
+                console.warn('getUserMedia no concedido:', err);
+            }
+
+            // Ocultar modal de inicio
+            document.getElementById('unlock-overlay').classList.add('hidden');
+
+            // Bienvenida y primera instrucción por voz
+            setTimeout(() => {
+                speakText('¡Hola! Bienvenido a Aventura de Palabras. Selecciona una categoría para empezar a jugar.');
+            }, 300);
+        }
+
+        /* ==========================================
+           5. REPRODUCCIÓN DE VOZ Y MICRÓFONO
+        ========================================== */
+        function speakText(text, onEndCallback) {
+            if (!synth) return;
+
+            // Solución crítica para Android WebView: cancelar locuciones previas antes de hablar
+            synth.cancel();
+
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = 0.8; // Velocidad pausada para niños
+            utterance.pitch = 1.1;
+
+            if (selectedLatinVoice) {
+                utterance.voice = selectedLatinVoice;
+            } else {
+                utterance.lang = 'es-MX';
+            }
+
+            if (onEndCallback) {
+                utterance.onend = onEndCallback;
+            }
+
+            synth.speak(utterance);
+        }
+
+        function speakCurrentWord() {
+            playSoundEffect('click');
+            const item = DATABASE[currentCategory][currentIndex];
+            speakText(item.word);
+        }
+
+        function toggleListening() {
+            playSoundEffect('click');
+
+            if (!recognition) {
+                showModal('El reconocimiento por voz nativo no está activo en este WebView. ¡Puedes presionar el botón azul "¡Ya la dije!" para jugar!');
+                return;
+            }
+
+            if (isListening) {
+                recognition.stop();
+            } else {
+                try {
+                    if (synth) synth.cancel();
+                    recognition.lang = 'es-MX';
+                    recognition.start();
+                } catch (e) {
+                    console.error('Error al encender el micrófono:', e);
+                }
+            }
+        }
+
+        function forceManualValidation() {
+            playSoundEffect('click');
+            const currentObj = DATABASE[currentCategory][currentIndex];
+            evaluateWord(currentObj.word);
+        }
+
+        function setMicUI(listening) {
+            const btnMic = document.getElementById('btn-mic');
+            const micIcon = document.getElementById('mic-icon');
+            const micLabel = document.getElementById('mic-label');
+            const waveContainer = document.getElementById('wave-container');
+
+            if (listening) {
+                btnMic.classList.add('mic-listening');
+                micIcon.className = "fa-solid fa-microphone-lines text-4xl";
+                micLabel.innerText = "ESCUCHANDO";
+                waveContainer.classList.remove('hidden');
+            } else {
+                btnMic.classList.remove('mic-listening');
+                micIcon.className = "fa-solid fa-microphone text-4xl";
+                micLabel.innerText = "HABLAR";
+                waveContainer.classList.add('hidden');
+            }
+        }
+
+        /* ==========================================
+           6. EVALUACIÓN DE PRONUNCIACIÓN CON TOLERANCIA
+        ========================================== */
+        function evaluateWord(spokenText) {
+            const currentObj = DATABASE[currentCategory][currentIndex];
+            const targetWord = currentObj.word.toLowerCase();
+            const alternatives = currentObj.alt || [];
+
+            const cleanSpoken = normalizeString(spokenText);
+            const cleanTarget = normalizeString(targetWord);
+
+            let isCorrect = cleanSpoken.includes(cleanTarget) || cleanTarget.includes(cleanSpoken);
+
+            if (!isCorrect) {
+                for (let alt of alternatives) {
+                    const cleanAlt = normalizeString(alt);
+                    if (cleanSpoken.includes(cleanAlt) || cleanAlt.includes(cleanSpoken)) {
+                        isCorrect = true;
+                        break;
+                    }
+                }
+            }
+
+            if (isCorrect) {
+                playSoundEffect('success');
+                stars += 1;
+                document.getElementById('star-count').innerText = stars;
+                updateProgressBar();
+                triggerConfetti();
+
+                const praise = POSITIVE_PRAISES[Math.floor(Math.random() * POSITIVE_PRAISES.length)];
+                setFeedback('¡CORRECTO! ' + praise, 'text-emerald-600 font-black text-sm');
+
+                speakText(praise, () => {
+                    setTimeout(() => {
+                        nextWord();
+                    }, 800);
+                });
+
+            } else {
+                playSoundEffect('error');
+                setFeedback(`Dijiste "${spokenText}". ¡Inténtalo otra vez!`, 'text-amber-700 font-bold');
+                speakText('Inténtalo otra vez. Escucha bien: ' + currentObj.word);
+            }
+        }
+
+        function normalizeString(str) {
+            return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+        }
+
+        function setFeedback(msg, className = 'text-gray-500 font-bold') {
+            const elem = document.getElementById('speech-feedback');
+            elem.innerText = msg;
+            elem.className = `text-xs text-center ${className}`;
+        }
+
+        /* ==========================================
+           7. NAVEGACIÓN Y LÓGICA DE JUEGO
+        ========================================== */
+        function selectCategory(cat) {
+            playSoundEffect('click');
+            currentCategory = cat;
+            currentIndex = 0;
+
+            document.getElementById('view-menu').classList.add('hidden');
+            document.getElementById('view-game').classList.remove('hidden');
+
+            const catTitles = {
+                animales: 'Animales 🦁',
+                frutas: 'Alimentos 🍎',
+                colores: 'Colores 🎨',
+                escuela: 'Escuela ✏️'
+            };
+
+            document.getElementById('header-title').innerText = catTitles[cat];
+            document.getElementById('header-subtitle').innerText = currentMode === 'aprende' ? 'Modo Aprende' : 'Modo Desafío';
+
+            loadCurrentWord();
+        }
+
+        function goHome() {
+            playSoundEffect('click');
+            if (synth) synth.cancel();
+            if (recognition && isListening) recognition.stop();
+
+            document.getElementById('view-game').classList.add('hidden');
+            document.getElementById('view-menu').classList.remove('hidden');
+
+            document.getElementById('header-title').innerText = 'Palabras Mágicas';
+            document.getElementById('header-subtitle').innerText = 'Selecciona una categoría';
+            
+            speakText('Selecciona una categoría para continuar jugando');
+        }
+
+        function setMode(mode) {
+            playSoundEffect('click');
+            currentMode = mode;
+            const btnLearn = document.getElementById('btn-mode-learn');
+            const btnChallenge = document.getElementById('btn-mode-challenge');
+
+            if (mode === 'aprende') {
+                btnLearn.className = 'flex-1 py-2.5 px-3 rounded-xl border-2 font-black text-xs bg-indigo-600 text-white border-indigo-800 shadow';
+                btnChallenge.className = 'flex-1 py-2.5 px-3 rounded-xl border-2 font-black text-xs bg-gray-100 text-gray-600 border-gray-300';
+            } else {
+                btnChallenge.className = 'flex-1 py-2.5 px-3 rounded-xl border-2 font-black text-xs bg-indigo-600 text-white border-indigo-800 shadow';
+                btnLearn.className = 'flex-1 py-2.5 px-3 rounded-xl border-2 font-black text-xs bg-gray-100 text-gray-600 border-gray-300';
+            }
+        }
+
+        function loadCurrentWord() {
+            const list = DATABASE[currentCategory];
+            if (currentIndex >= list.length) {
+                currentIndex = 0;
+            }
+
+            const item = list[currentIndex];
+            document.getElementById('word-emoji').innerText = item.emoji;
+            document.getElementById('word-text').innerText = item.word;
+
+            const badgeText = document.getElementById('badge-text');
+            badgeText.innerText = `Palabra ${currentIndex + 1} de ${list.length}`;
+
+            setFeedback('Toca el micrófono y repite la palabra', 'text-gray-500 font-bold');
+            updateProgressBar();
+
+            setTimeout(() => {
+                speakCurrentWord();
+            }, 300);
+        }
+
+        function nextWord() {
+            playSoundEffect('click');
+            if (synth) synth.cancel();
+            currentIndex = (currentIndex + 1) % DATABASE[currentCategory].length;
+            loadCurrentWord();
+        }
+
+        function updateProgressBar() {
+            const list = DATABASE[currentCategory];
+            const progress = ((currentIndex + 1) / list.length) * 100;
+            document.getElementById('progress-bar').style.width = `${progress}%`;
+        }
+
+        function triggerConfetti() {
+            if (typeof confetti === 'function') {
+                confetti({
+                    particleCount: 70,
+                    spread: 60,
+                    origin: { y: 0.65 }
+                });
+            }
+        }
+
+        function showModal(msg) {
+            document.getElementById('modal-alert-msg').innerText = msg;
+            document.getElementById('modal-alert').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            playSoundEffect('click');
+            document.getElementById('modal-alert').classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
